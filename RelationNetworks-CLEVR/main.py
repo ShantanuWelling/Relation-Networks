@@ -27,7 +27,7 @@ seed = 42
 batch_size = 640
 dropout = -1
 epochs = 200
-bs_max = 1
+bs_max = -1
 bs_gamma = 1
 bs_step = 20
 clip_norm = 50
@@ -252,7 +252,8 @@ optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr
 scheduler = lr_scheduler.StepLR(optimizer, lr_step, gamma=lr_gamma)
 scheduler.last_epoch = start_epoch
 for epoch in progress_bar:
-
+    #clevr_train_loader = None
+    #clevr_test_loader = None
     if(((bs_max > 0 and bs < bs_max) or bs_max < 0 ) and (epoch % bs_step == 0 or epoch == start_epoch)):
         bs = math.floor(batch_size * (bs_gamma ** (epoch // bs_step)))
         if bs > bs_max and bs_max > 0:
