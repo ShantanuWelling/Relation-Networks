@@ -185,20 +185,7 @@ class RN(nn.Module):
             print('Supposing original DeepMind model')
 
     def forward(self, img, qst_idxs):
-        if self.state_desc:
-            x = img # (B x 12 x 8)
-        else:
-            x = self.conv(img)  # (B x 24 x 8 x 8)
-            b, k, d, _ = x.size()
-            x = x.view(b,k,d*d) # (B x 24 x 8*8)
-            
-            # add coordinates
-            if self.coord_tensor is None or torch.cuda.device_count() == 1:
-                self.build_coord_tensor(b, d)                  # (B x 2 x 8 x 8)
-                self.coord_tensor = self.coord_tensor.view(b,2,d*d) # (B x 2 x 8*8)
-            
-            x = torch.cat([x, self.coord_tensor], 1)    # (B x 24+2 x 8*8)
-            x = x.permute(0, 2, 1)    # (B x 64 x 24+2)
+        x = img # (B x 12 x 8)
         
         qst = self.text(qst_idxs)
         y = self.rl(x, qst)
