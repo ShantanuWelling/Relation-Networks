@@ -24,4 +24,4 @@ To run the above 2 folders, first download the CLEVR data from https://cs.stanfo
 navigate to the respective folder and run: <br/>
 ```python3 main.py``` <br/>
 
-This saves the outputs in folders "model*", "logs", "test_results" and the file logfile.log for RelationNetworks-CLEVR and the folders model, runs and a .csv file for rn_clevr_pix. 
+This saves the outputs in folders "model*", "logs", "test_results" and the file logfile.log for RelationNetworks-CLEVR and in the folders- model, runs and a .csv file for rn_clevr_pix. 
