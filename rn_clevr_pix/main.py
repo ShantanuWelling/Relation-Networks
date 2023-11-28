@@ -1,12 +1,6 @@
-"""""""""
-Pytorch implementation of "A simple neural network module for relational reasoning
-Code is based on pytorch/examples/mnist (https://github.com/pytorch/examples/tree/master/mnist)
-"""""""""
 from __future__ import print_function
 import argparse
 import os
-#import cPickle as pickle
-import pickle
 import random
 import numpy as np
 import csv
@@ -18,43 +12,30 @@ from torch.autograd import Variable
 import torchvision.transforms as transforms
 import torchvision
 
-from model import RN, CNN_MLP
+from model import RN
 
 import json
 from PIL import Image
+
+
+# HYPER-PARAMETERS
+epochs = 20
+batch_size = 64
+seed = 42
+print_freq = 10
+
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '6'
-# Training settings
-parser = argparse.ArgumentParser(description='PyTorch Relational-Network sort-of-CLVR Example')
-parser.add_argument('--model', type=str, choices=['RN', 'CNN_MLP'], default='RN', 
-                    help='resume from model stored')
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--epochs', type=int, default=20, metavar='N',
-                    help='number of epochs to train (default: 20)')
-parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',
-                    help='learning rate (default: 0.0001)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='how many batches to wait before logging training status')
-parser.add_argument('--resume', type=str,
-                    help='resume from model stored')
-parser.add_argument('--relation-type', type=str, default='binary',
-                    help='what kind of relations to learn. options: binary, ternary (default: binary)')
 
-args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
 
 summary_writer = SummaryWriter()
-  
+
 model_dirs = './model'
-bs = args.batch_size
+bs = batch_size
 
 def tensor_data(data, i):
     img = torch.from_numpy(np.asarray(data[0][bs*i:bs*(i+1)]))
@@ -73,10 +54,10 @@ def cvt_data_axis(data):
     ans = [e[2] for e in data]
     return (img,qst,ans)
 
-    
+
 def train(epoch, rel):
     model.train() # set training mode
-    
+
     random.shuffle(rel) # shuffle training set
 
     rel = cvt_data_axis(rel) # convert data to axis
@@ -84,7 +65,7 @@ def train(epoch, rel):
     acc = [] #accuracy
 
     l = [] #loss
-    
+
     for batch_idx in range(len(rel[0]) // bs):
 
         tensor_data(rel, batch_idx)
@@ -92,7 +73,7 @@ def train(epoch, rel):
         acc.append(accuracy.item())
         l.append(loss.item())
 
-        if batch_idx % args.log_interval == 0:
+        if batch_idx % print_freq == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)] '
                   'Train accuracy: {:.0f}%'.format(
                    epoch,
@@ -100,7 +81,7 @@ def train(epoch, rel):
                    len(rel[0]) * 2,
                    100. * batch_idx * bs / len(rel[0]),
                    accuracy))
-        
+
     avg_acc = sum(acc) / len(acc)
 
     summary_writer.add_scalars('Accuracy/train', {
@@ -118,7 +99,7 @@ def train(epoch, rel):
 
 def validate(epoch, rel):
     model.eval() # set evaluation mode
-    
+
     rel = cvt_data_axis(rel)
 
     accuracy = []
@@ -148,7 +129,7 @@ def validate(epoch, rel):
 
     return accuracy
 
-    
+
 def load_data():
     print('loading data...')
     dirs = '../CLEVR_v1.0'
@@ -186,9 +167,9 @@ def load_data():
     input_img = torch.FloatTensor(bs, 3, 128, 128) # image is 3 x 128 x 128 (channels x width x height)
     input_qst = torch.LongTensor(bs, max_question_length)
     label = torch.LongTensor(bs)
-    model = RN(args,vocab_size)
+    model = RN(vocab_size)
 
-    if args.cuda:
+    if torch.cuda.is_available():
         model.cuda()
         input_img = input_img.cuda()
         input_qst = input_qst.cuda()
@@ -216,7 +197,7 @@ def load_data():
         img = tf(img)
         img = np.asarray(img)
         img = np.swapaxes(img, 0, 2)
-        
+
         while question_index<len(train_questions['questions']) and train_questions['questions'][question_index]['image_index'] == img_idx:
             question = train_questions['questions'][question_index]['question']
             # remove trailing question mark and convert to lowercase
@@ -231,7 +212,7 @@ def load_data():
             answer = word_to_int[answer.lower()]
             rel_train.append((img, question, answer))
             question_index += 1
-    
+
     question_index = 0
     for img_idx in range(len(num_val)):
         img = Image.open(os.path.join(dirs, 'images', 'val', f'CLEVR_val_{str(img_idx).zfill(6)}.png')).convert('RGB')
@@ -247,7 +228,7 @@ def load_data():
         img = tf(img)
         img = np.asarray(img)
         img = np.swapaxes(img, 0, 2)
-        
+
         while question_index<len(val_questions['questions']) and val_questions['questions'][question_index]['image_index'] == img_idx:
             question = val_questions['questions'][question_index]['question']
             # remove trailing question mark and convert to lowercase
@@ -262,9 +243,9 @@ def load_data():
             answer = word_to_int[answer.lower()]
             rel_val.append((img, question, answer))
             question_index += 1
-    
+
     return (rel_train, rel_val, input_img, input_qst, label, vocab_size, model)
-    
+
 
 rel_train, rel_val, input_img, input_qst, label, vocab_size, model = load_data()
 
@@ -273,21 +254,15 @@ try:
 except:
     print('directory {} already exists'.format(model_dirs))
 
-if args.resume:
-    filename = os.path.join(model_dirs, args.resume)
-    if os.path.isfile(filename):
-        print('==> loading checkpoint {}'.format(filename))
-        checkpoint = torch.load(filename)
-        model.load_state_dict(checkpoint)
-        print('==> loaded checkpoint {}'.format(filename))
 
-with open(f'./{args.model}_{args.seed}_log.csv', 'w') as log_file:
+
+with open(f'./RN_{seed}_log.csv', 'w') as log_file:
     csv_writer = csv.writer(log_file, delimiter=',')
     csv_writer.writerow(['epoch', 'train_acc','val_acc'])
 
-    print(f"Training {args.model} {f'({args.relation_type})' if args.model == 'RN' else ''} model...")
+    print("Training RN")
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, epochs + 1):
         train_acc = train(
             epoch, rel_train)
         val_acc = validate(
