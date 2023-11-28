@@ -5,26 +5,26 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
+# HYPER-PARAMETERS
+batch_size = 64
+lr = 0.0001
 
+# CNN layer to convert images to objects
+# Using Pre-trained VGG layer
 class ConvInputModel(nn.Module):
     def __init__(self):
         super(ConvInputModel, self).__init__()
 
-        # self.conv1 = nn.Conv2d(3, 24, 3, stride=2, padding=1)
-        # self.batchNorm1 = nn.BatchNorm2d(24)
-        # self.conv2 = nn.Conv2d(24, 24, 3, stride=2, padding=1)
-        # self.batchNorm2 = nn.BatchNorm2d(24)
-        # self.conv3 = nn.Conv2d(24, 24, 3, stride=2, padding=1)
-        # self.batchNorm3 = nn.BatchNorm2d(24)
-        # self.conv4 = nn.Conv2d(24, 24, 3, stride=2, padding=1)
-        # self.batchNorm4 = nn.BatchNorm2d(24)
-
-        # TRY
+        # loading pretrained VGG
         temp = torch.hub.load('pytorch/vision:v0.10.0', 'vgg11', pretrained=True)
+
+        # removing the classifier layer of VGG
         self.baseModel = list(temp.children())[0]
 
+        # Removing the last 6 layers of VGG as our input size is small (75 x 75)
         self.baseModel = self.baseModel[:-6]
 
+        # Setting grad to false
         for param in self.baseModel.parameters():
             param.requires_grad = False
 
@@ -36,23 +36,8 @@ class ConvInputModel(nn.Module):
     def forward(self, img):
         """convolution"""
 
-        # x = self.conv1(img)
-        # x = F.relu(x)
-        # x = self.batchNorm1(x)
-        # x = self.conv2(x)
-        # x = F.relu(x)
-        # x = self.batchNorm2(x)
-        # x = self.conv3(x)
-        # x = F.relu(x)
-        # x = self.batchNorm3(x)
-        # x = self.conv4(x)
-        # x = F.relu(x)
-        # x = self.batchNorm4(x)
-
         # x = (24 x 5 x 5) should be final size of Conv
 
-
-        # TRY
         x = self.baseModel(img)
         x = self.conv1(x)
         x = self.adp(x)
@@ -60,6 +45,7 @@ class ConvInputModel(nn.Module):
         return x
 
 
+# Final FC layer that produces logits using log_softmax
 class FCOutputModel(nn.Module):
     def __init__(self):
         super(FCOutputModel, self).__init__()
@@ -74,37 +60,10 @@ class FCOutputModel(nn.Module):
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
 
-class BasicModel(nn.Module):
-    def __init__(self, args, name):
-        super(BasicModel, self).__init__()
-        self.name=name
-
-    def train_(self, input_img, input_qst, label):
-        self.optimizer.zero_grad()
-        output = self(input_img, input_qst)
-        loss = F.nll_loss(output, label)
-        loss.backward()
-        self.optimizer.step()
-        pred = output.data.max(1)[1]
-        correct = pred.eq(label.data).cpu().sum()
-        accuracy = correct * 100. / len(label)
-        return accuracy, loss
-
-    def test_(self, input_img, input_qst, label):
-        output = self(input_img, input_qst)
-        loss = F.nll_loss(output, label)
-        pred = output.data.max(1)[1]
-        correct = pred.eq(label.data).cpu().sum()
-        accuracy = correct * 100. / len(label)
-        return accuracy, loss
-
-    def save_model(self, epoch):
-        torch.save(self.state_dict(), 'model/epoch_{}_{:02d}.pth'.format(self.name, epoch))
-
-
-class RN(BasicModel):
-    def __init__(self, args):
-        super(RN, self).__init__(args, 'RN')
+# Main RN model class that implements the entire architecture
+class RN(nn.Module):
+    def __init__(self):
+        super(RN, self).__init__()
 
         self.conv = ConvInputModel()
 
@@ -117,23 +76,26 @@ class RN(BasicModel):
 
         self.f_fc1 = nn.Linear(256, 256)
 
-        self.coord_oi = torch.FloatTensor(args.batch_size, 2)
-        self.coord_oj = torch.FloatTensor(args.batch_size, 2)
-        if args.cuda:
+        self.coord_oi = torch.FloatTensor(batch_size, 2)
+        self.coord_oj = torch.FloatTensor(batch_size, 2)
+
+        if torch.cuda.is_available():
             self.coord_oi = self.coord_oi.cuda()
             self.coord_oj = self.coord_oj.cuda()
+
+        # Since we are appending objects with the co-ordinates we define these
         self.coord_oi = Variable(self.coord_oi)
         self.coord_oj = Variable(self.coord_oj)
 
-        # prepare coord tensor
+        # Prepare coord tensor
         def cvt_coord(i):
             return [(i/5-2)/2., (i%5-2)/2.]
 
-        self.coord_tensor = torch.FloatTensor(args.batch_size, 25, 2)
-        if args.cuda:
+        self.coord_tensor = torch.FloatTensor(batch_size, 25, 2)
+        if torch.cuda.is_available():
             self.coord_tensor = self.coord_tensor.cuda()
         self.coord_tensor = Variable(self.coord_tensor)
-        np_coord_tensor = np.zeros((args.batch_size, 25, 2))
+        np_coord_tensor = np.zeros((batch_size, 25, 2))
         for i in range(25):
             np_coord_tensor[:,i,:] = np.array( cvt_coord(i) )
         self.coord_tensor.data.copy_(torch.from_numpy(np_coord_tensor))
@@ -141,13 +103,13 @@ class RN(BasicModel):
 
         self.fcout = FCOutputModel()
 
-        self.optimizer = optim.Adam(self.parameters(), lr=args.lr)
+        self.optimizer = optim.Adam(self.parameters(), lr=lr)
 
 
     def forward(self, img, qst):
         x = self.conv(img) ## x = (64 x 24 x 5 x 5)
 
-        """g"""
+        # G MLP of the architecture
         mb = x.size()[0]
         n_channels = x.size()[1]
         d = x.size()[2]
@@ -173,6 +135,7 @@ class RN(BasicModel):
         x_full = torch.cat([x_i,x_j],3) # (64x25x25x2*26+18)
 
         # reshape for passing through network
+        # this x_ is the final pairs of different objects appended with question that is passed as input to G MLP as defined in report
         x_ = x_full.view(mb * (d * d) * (d * d), 70)  # (64*25*25x2*26*18) = (40.000, 70)
 
         x_ = self.g_fc1(x_)
@@ -189,34 +152,33 @@ class RN(BasicModel):
 
         x_g = x_g.sum(1).squeeze()
 
-        """f"""
+        # F MLP of the architecture
         x_f = self.f_fc1(x_g)
         x_f = F.relu(x_f)
 
         return self.fcout(x_f)
 
+    def train_(self, input_img, input_qst, label):
+        self.optimizer.zero_grad()
+        output = self(input_img, input_qst)
+        loss = F.nll_loss(output, label)
+        loss.backward()
+        self.optimizer.step()
+        pred = output.data.max(1)[1]
+        correct = pred.eq(label).cpu().sum()
+        accuracy = correct * 100. / len(label)
+        return accuracy, loss
 
-class CNN_MLP(BasicModel):
-    def __init__(self, args):
-        super(CNN_MLP, self).__init__(args, 'CNNMLP')
+    def test_(self, input_img, input_qst, label):
+        output = self(input_img, input_qst)
+        loss = F.nll_loss(output, label)
+        pred = output.data.max(1)[1]
+        correct = pred.eq(label).cpu().sum()
+        accuracy = correct * 100. / len(label)
+        return accuracy, loss
 
-        self.conv  = ConvInputModel()
-        self.fc1   = nn.Linear(5*5*24 + 18, 256)  # question concatenated to all
-        self.fcout = FCOutputModel()
+    def save_model(self, epoch):
+        torch.save(self.state_dict(), 'model/epoch_{}_{:02d}.pth'.format('RN', epoch))
 
-        self.optimizer = optim.Adam(self.parameters(), lr=args.lr)
-        #print([ a for a in self.parameters() ] )
 
-    def forward(self, img, qst):
-        x = self.conv(img) ## x = (64 x 24 x 5 x 5)
-
-        """fully connected layers"""
-        x = x.view(x.size(0), -1)
-
-        x_ = torch.cat((x, qst), 1)  # Concat question
-
-        x_ = self.fc1(x_)
-        x_ = F.relu(x_)
-
-        return self.fcout(x_)
 
