@@ -2,7 +2,11 @@
 
 Link to presentation: <br/>
 https://iitbacin-my.sharepoint.com/:p:/g/personal/210010076_iitb_ac_in/EVQ-hjYA8-RMvDoVA0aKA_cBuUYZbe0J_HOJMjPu7M4vfw?e=cBpTse <br/>
-Also added at "AIML Presentation.pdf"
+Also added at "AIML Presentation.pdf" in this repo.
+
+Link to report: <br/>
+https://drive.google.com/file/d/1VGsi6Cxk19kqs8TJUZVVg6abTTWP-_I5/view?usp=sharing <br/>
+Also added at "AIML Report.pdf" in this repo.
 
 There are 5 folders in this repo. <br/>
 cnn_mlp folder is the SOTA model (for comparison) on Sort-of-CLEVR data <br/>
